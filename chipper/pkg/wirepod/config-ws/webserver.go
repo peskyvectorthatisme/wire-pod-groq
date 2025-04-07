@@ -25,18 +25,20 @@ import (
 var SttInitFunc func() error
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
-	endpoint := strings.Split(r.URL.Path, "/")[2]
-	switch endpoint {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "*")
+
+	switch strings.TrimPrefix(r.URL.Path, "/api/") {
 	case "add_custom_intent":
 		handleAddCustomIntent(w, r)
 	case "edit_custom_intent":
 		handleEditCustomIntent(w, r)
-	case "remove_custom_intent":
-		handleRemoveCustomIntent(w, r)
 	case "get_custom_intents_json":
 		handleGetCustomIntentsJson(w)
+	case "remove_custom_intent":
+		handleRemoveCustomIntent(w, r)
 	case "is_api_v3":
-		fmt.Fprint(w, "true")
+		fmt.Fprintf(w, "it is!")
 	case "get_config":
 		handleGetConfig(w)
 	case "set_weather_api":
@@ -57,22 +59,20 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		handleGetLogs(w)
 	case "get_debug_logs":
 		handleGetDebugLogs(w)
-	case "get_escapepod_mode":
-		fmt.Fprint(w, strconv.FormatBool(vars.APIConfig.Server.EPConfig))
-	case "get_is_running":
+	case "is_running":
 		handleIsRunning(w)
 	case "delete_chats":
 		handleDeleteChats(w)
+	case "get_ota":
+		handleGetOTA(w, r)
 	case "get_version_info":
 		handleGetVersionInfo(w)
-	case "reset":
-		handleReset(w)
-	case "certgen":
+	case "generate_certs":
 		handleGenerateCerts(w)
 	case "test_endpoint":
 		handleTestEndpoint(w, r)
 	default:
-		http.Error(w, "unknown endpoint", http.StatusBadRequest)
+		http.Error(w, "not found", http.StatusNotFound)
 	}
 }
 
