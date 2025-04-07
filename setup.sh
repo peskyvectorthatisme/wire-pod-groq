@@ -251,6 +251,7 @@ function getSTT() {
         }
         
         whichWhisperProvider
+        echo "export WHISPER_PROVIDER=${whisperProvider}" >> ./chipper/source.sh
         
         if [[ ${whisperProvider} == "openai" ]]; then
             function openAIKeyPrompt() {
@@ -265,7 +266,8 @@ function getSTT() {
                 fi
             }
             openAIKeyPrompt
-            echo "export OPENAI_KEY=${openaiKey}" >> ./chipper/source.sh
+            echo "export WHISPER_API_KEY=${openaiKey}" >> ./chipper/source.sh
+            echo "export WHISPER_ENDPOINT=https://api.openai.com/v1" >> ./chipper/source.sh
             echo "Setting up OpenAI Whisper API service."
             
         elif [[ ${whisperProvider} == "groq" ]]; then
@@ -294,10 +296,57 @@ function getSTT() {
             groqKeyPrompt
             groqEndpointPrompt
             
-            # Create a temporary JSON config file to be processed later
-            echo "{\"knowledge\":{\"provider\":\"groq\",\"key\":\"${groqKey}\",\"endpoint\":\"${groqEndpoint}\"}}" > ./chipper/groq_config.json
+            echo "export WHISPER_API_KEY=${groqKey}" >> ./chipper/source.sh
+            echo "export WHISPER_ENDPOINT=${groqEndpoint}" >> ./chipper/source.sh
             echo "Setting up Groq Whisper API service with endpoint: ${groqEndpoint}"
         fi
+        
+        # Ask for language setting
+        function whisperLanguagePrompt() {
+            echo
+            echo "Which language would you like to use for speech recognition?"
+            echo "1: English (US) [en-US]"
+            echo "2: Italian (IT) [it-IT]"
+            echo "3: Spanish (ES) [es-ES]"
+            echo "4: French (FR) [fr-FR]"
+            echo "5: German (DE) [de-DE]"
+            echo "6: Portuguese (BR) [pt-BR]"
+            echo "7: Polish (PL) [pl-PL]"
+            echo "8: Turkish (TR) [tr-TR]"
+            echo "9: Chinese (CN) [zh-CN]"
+            echo "10: Russian (RU) [ru-RU]"
+            echo "11: Dutch (NL) [nt-NL]"
+            echo "12: Ukrainian (UA) [uk-UA]"
+            echo "13: Vietnamese (VN) [vi-VN]"
+            echo
+            read -p "Enter a number (1): " langNum
+            
+            case $langNum in
+                "") sttLang="en-US" ;;
+                "1") sttLang="en-US" ;;
+                "2") sttLang="it-IT" ;;
+                "3") sttLang="es-ES" ;;
+                "4") sttLang="fr-FR" ;;
+                "5") sttLang="de-DE" ;;
+                "6") sttLang="pt-BR" ;;
+                "7") sttLang="pl-PL" ;;
+                "8") sttLang="tr-TR" ;;
+                "9") sttLang="zh-CN" ;;
+                "10") sttLang="ru-RU" ;;
+                "11") sttLang="nt-NL" ;;
+                "12") sttLang="uk-UA" ;;
+                "13") sttLang="vi-VN" ;;
+                *)
+                    echo "Invalid selection. Using English (US)."
+                    sttLang="en-US"
+                    ;;
+            esac
+        }
+        
+        whisperLanguagePrompt
+        echo "export STT_LANGUAGE=${sttLang}" >> ./chipper/source.sh
+        echo "Speech recognition language set to: ${sttLang}"
+        
         elif [[ ${sttService} == "whisper.cpp" ]]; then
         echo "export STT_SERVICE=whisper.cpp" >> ./chipper/source.sh
         origDir="$(pwd)"

@@ -38,8 +38,12 @@ type apiConfig struct {
 		Temperature            float32 `json:"temp"`
 	} `json:"knowledge"`
 	STT struct {
-		Service  string `json:"provider"`
-		Language string `json:"language"`
+		Service       string `json:"provider"`
+		Language      string `json:"language"`
+		APIKey        string `json:"api_key"`
+		Endpoint      string `json:"endpoint"`
+		Provider      string `json:"stt_provider"`
+		Model         string `json:"model"`
 	} `json:"STT"`
 	Server struct {
 		// false for ip, true for escape pod
@@ -86,8 +90,48 @@ func WriteSTT() {
 	// was not part of the original code, so this is its own function
 	// launched if stt not found in config
 	APIConfig.STT.Service = os.Getenv("STT_SERVICE")
-	if os.Getenv("STT_SERVICE") == "vosk" || os.Getenv("STT_SERVICE") == "whisper.cpp" {
-		APIConfig.STT.Language = os.Getenv("STT_LANGUAGE")
+	
+	// Additional configuration for Whisper service
+	if os.Getenv("STT_SERVICE") == "whisper" {
+		// Check for provider-specific environment variables
+		if os.Getenv("WHISPER_PROVIDER") != "" {
+			APIConfig.STT.Provider = os.Getenv("WHISPER_PROVIDER")
+		}
+		
+		// API Key
+		if os.Getenv("WHISPER_API_KEY") != "" {
+			APIConfig.STT.APIKey = os.Getenv("WHISPER_API_KEY")
+		} else if os.Getenv("OPENAI_KEY") != "" && (APIConfig.STT.Provider == "" || APIConfig.STT.Provider == "openai") {
+			APIConfig.STT.APIKey = os.Getenv("OPENAI_KEY")
+			APIConfig.STT.Provider = "openai"
+		}
+		
+		// Endpoint
+		if os.Getenv("WHISPER_ENDPOINT") != "" {
+			APIConfig.STT.Endpoint = os.Getenv("WHISPER_ENDPOINT")
+		} else if APIConfig.STT.Provider == "openai" {
+			APIConfig.STT.Endpoint = "https://api.openai.com/v1"
+		} else if APIConfig.STT.Provider == "groq" {
+			APIConfig.STT.Endpoint = "https://api.groq.com/openai/v1"
+		}
+		
+		// Set language
+		if os.Getenv("STT_LANGUAGE") != "" {
+			APIConfig.STT.Language = os.Getenv("STT_LANGUAGE")
+		}
+	} else if os.Getenv("STT_SERVICE") == "whisper.cpp" {
+		// For whisper.cpp, track the model being used
+		if os.Getenv("WHISPER_MODEL") != "" {
+			APIConfig.STT.Model = os.Getenv("WHISPER_MODEL")
+		}
+		
+		if os.Getenv("STT_LANGUAGE") != "" {
+			APIConfig.STT.Language = os.Getenv("STT_LANGUAGE")
+		}
+	} else if os.Getenv("STT_SERVICE") == "vosk" {
+		if os.Getenv("STT_LANGUAGE") != "" {
+			APIConfig.STT.Language = os.Getenv("STT_LANGUAGE")
+		}
 	}
 }
 

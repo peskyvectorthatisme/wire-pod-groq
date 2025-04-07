@@ -219,37 +219,72 @@ func handleGetKGAPI(w http.ResponseWriter) {
 
 func handleSetSTTInfo(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Language string `json:"language"`
+		Language    string `json:"language"`
+		Provider    string `json:"provider"`
+		SttProvider string `json:"stt_provider"`
+		APIKey      string `json:"api_key"`
+		Endpoint    string `json:"endpoint"`
+		Model       string `json:"model"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	if vars.APIConfig.STT.Service == "vosk" {
+	
+	// Set the STT service
+	if request.Provider != "" {
+		vars.APIConfig.STT.Service = request.Provider
+	}
+	
+	// Handle language settings
+	if request.Provider == "vosk" {
 		if !isValidLanguage(request.Language, localization.ValidVoskModels) {
-			http.Error(w, "language not valid", http.StatusBadRequest)
+			http.Error(w, "language not valid for Vosk", http.StatusBadRequest)
 			return
 		}
 		if !isDownloadedLanguage(request.Language, vars.DownloadedVoskModels) {
 			go localization.DownloadVoskModel(request.Language)
-			fmt.Fprint(w, "downloading language model...")
+			fmt.Fprint(w, "downloading")
 			return
 		}
-	} else if vars.APIConfig.STT.Service == "whisper.cpp" {
-		if !isValidLanguage(request.Language, localization.ValidVoskModels) {
-			http.Error(w, "language not valid", http.StatusBadRequest)
-			return
+	} else if request.Provider == "whisper.cpp" {
+		// Handle whisper.cpp model
+		if request.Model != "" {
+			vars.APIConfig.STT.Model = request.Model
 		}
+	} else if request.Provider == "whisper" {
+		// Handle Whisper API settings
+		if request.SttProvider != "" {
+			vars.APIConfig.STT.Provider = request.SttProvider
+		}
+		
+		if request.APIKey != "" {
+			vars.APIConfig.STT.APIKey = request.APIKey
+		}
+		
+		if request.Endpoint != "" {
+			vars.APIConfig.STT.Endpoint = request.Endpoint
+		} else if vars.APIConfig.STT.Provider == "openai" {
+			vars.APIConfig.STT.Endpoint = "https://api.openai.com/v1"
+		} else if vars.APIConfig.STT.Provider == "groq" {
+			vars.APIConfig.STT.Endpoint = "https://api.groq.com/openai/v1"
+		}
+		
 	} else {
 		http.Error(w, "service must be vosk, whisper.cpp, or whisper", http.StatusBadRequest)
 		return
 	}
-	vars.APIConfig.STT.Language = request.Language
+	
+	// Set language for all providers
+	if request.Language != "" {
+		vars.APIConfig.STT.Language = request.Language
+	}
+	
 	vars.APIConfig.PastInitialSetup = true
 	vars.WriteConfigToDisk()
 	processreqs.ReloadVosk()
 	logger.Println("Reloaded voice processor successfully")
-	fmt.Fprint(w, "Language switched successfully.")
+	fmt.Fprint(w, "Settings saved successfully.")
 }
 
 func handleGetDownloadStatus(w http.ResponseWriter) {

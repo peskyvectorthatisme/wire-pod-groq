@@ -596,12 +596,122 @@ function showLanguage() {
   fetch("/api/get_stt_info")
     .then((response) => response.json())
     .then((parsed) => {
-      if (parsed.provider !== "vosk" && parsed.provider !== "whisper.cpp" && parsed.provider !== "whisper") {
-        displayError("languageStatus", `To set the STT language, the provider must be Vosk, Whisper.cpp, or Whisper API. The current one is '${parsed.sttProvider}'.`);
-        getE("languageSelectionDiv").style.display = "none";
-      } else {
-        getE("languageSelectionDiv").style.display = "block";
+      // Set up the current STT service selection
+      if (parsed.provider) {
+        getE("sttServiceSelection").value = parsed.provider;
+        updateSTTServiceOptions();
+      }
+      
+      // Set up Whisper API settings if applicable
+      if (parsed.provider === "whisper") {
+        // Set provider (OpenAI or Groq)
+        if (parsed.stt_provider) {
+          getE("whisperProviderSelection").value = parsed.stt_provider;
+          updateWhisperProviderOptions();
+        }
+        
+        // Set API key
+        if (parsed.api_key) {
+          getE("whisperApiKey").value = parsed.api_key;
+        }
+        
+        // Set endpoint
+        if (parsed.endpoint) {
+          getE("whisperEndpoint").value = parsed.endpoint;
+        } else {
+          // Set default endpoint based on provider
+          const provider = getE("whisperProviderSelection").value;
+          if (provider === "openai") {
+            getE("whisperEndpoint").value = "https://api.openai.com/v1";
+          } else if (provider === "groq") {
+            getE("whisperEndpoint").value = "https://api.groq.com/openai/v1";
+          }
+        }
+      }
+      
+      // Set up Whisper.cpp model if applicable
+      if (parsed.provider === "whisper.cpp" && parsed.model) {
+        getE("whisperCppModel").value = parsed.model;
+      }
+      
+      // Set language
+      if (parsed.language) {
         getE("languageSelection").value = parsed.language;
+      }
+    });
+}
+
+function updateSTTServiceOptions() {
+  const service = getE("sttServiceSelection").value;
+  
+  // Hide all service-specific settings
+  getE("whisperApiSettings").style.display = "none";
+  getE("whisperCppSettings").style.display = "none";
+  
+  // Show relevant settings based on service
+  if (service === "whisper") {
+    getE("whisperApiSettings").style.display = "block";
+    updateWhisperProviderOptions();
+  } else if (service === "whisper.cpp") {
+    getE("whisperCppSettings").style.display = "block";
+  }
+}
+
+function updateWhisperProviderOptions() {
+  const provider = getE("whisperProviderSelection").value;
+  
+  // Update the endpoint placeholder based on provider
+  if (provider === "openai") {
+    getE("whisperEndpoint").placeholder = "https://api.openai.com/v1";
+    if (!getE("whisperEndpoint").value) {
+      getE("whisperEndpoint").value = "https://api.openai.com/v1";
+    }
+  } else if (provider === "groq") {
+    getE("whisperEndpoint").placeholder = "https://api.groq.com/openai/v1";
+    if (!getE("whisperEndpoint").value) {
+      getE("whisperEndpoint").value = "https://api.groq.com/openai/v1";
+    }
+  }
+}
+
+function saveSTTSettings() {
+  const service = getE("sttServiceSelection").value;
+  const language = getE("languageSelection").value;
+  
+  const data = {
+    provider: service,
+    language: language,
+    stt_provider: "",
+    api_key: "",
+    endpoint: "",
+    model: ""
+  };
+  
+  // Add service-specific settings
+  if (service === "whisper") {
+    data.stt_provider = getE("whisperProviderSelection").value;
+    data.api_key = getE("whisperApiKey").value;
+    data.endpoint = getE("whisperEndpoint").value;
+  } else if (service === "whisper.cpp") {
+    data.model = getE("whisperCppModel").value;
+  }
+
+  displayMessage("languageStatus", "Saving settings...");
+
+  fetch("/api/set_stt_info", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  })
+    .then((response) => response.text())
+    .then((response) => {
+      if (response.includes("downloading")) {
+        displayMessage("languageStatus", "Downloading model...");
+        updateSTTLanguageDownload();
+      } else {
+        displayMessage("languageStatus", response);
       }
     });
 }

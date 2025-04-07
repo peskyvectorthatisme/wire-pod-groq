@@ -224,13 +224,67 @@
       </div>
 
       <div id="section-language" style="display: none">
-        <h2>STT Language</h2>
+        <h2>Speech Recognition Settings</h2>
         <hr class="small-hr">
-        <p>Set the speech-to-text language you'd like wire-pod to use.</p>
+        <p>Configure speech-to-text service settings and language.</p>
         <hr class="small-hr">
         <div id="languageStatus"></div>
-        <div id="languageSelectionDiv">
+        
+        <!-- STT Service Selection -->
+        <div>
+          <label for="sttServiceSelection">STT Service:</label>
+          <select name="sttServiceSelection" id="sttServiceSelection" onchange="updateSTTServiceOptions()">
+            <option value="vosk">VOSK (recommended)</option>
+            <option value="whisper">Whisper API (OpenAI/Groq)</option>
+            <option value="whisper.cpp">Whisper.cpp (local)</option>
+            <option value="coqui">Coqui (local)</option>
+            <option value="leopard">Picovoice Leopard (local)</option>
+          </select>
+        </div>
+        
+        <!-- Provider-specific settings for Whisper API -->
+        <div id="whisperApiSettings" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+          <h3>Whisper API Settings</h3>
+          
           <div>
+            <label for="whisperProviderSelection">API Provider:</label>
+            <select name="whisperProviderSelection" id="whisperProviderSelection" onchange="updateWhisperProviderOptions()">
+              <option value="openai">OpenAI</option>
+              <option value="groq">Groq</option>
+            </select>
+          </div>
+          
+          <div>
+            <label for="whisperApiKey">API Key:</label>
+            <input type="text" id="whisperApiKey" name="whisperApiKey" />
+          </div>
+          
+          <div>
+            <label for="whisperEndpoint">API Base URL:</label>
+            <input type="text" id="whisperEndpoint" name="whisperEndpoint" placeholder="https://api.openai.com/v1" />
+          </div>
+        </div>
+        
+        <!-- Model selection for Whisper.cpp -->
+        <div id="whisperCppSettings" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+          <h3>Whisper.cpp Settings</h3>
+          
+          <div>
+            <label for="whisperCppModel">Model:</label>
+            <select name="whisperCppModel" id="whisperCppModel">
+              <option value="tiny">Tiny (recommended)</option>
+              <option value="base">Base</option>
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large-v3">Large v3</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Language selection -->
+        <div id="languageSelectionDiv" style="margin-top: 15px;">
+          <div>
+            <label for="languageSelection">Recognition Language:</label>
             <select name="languageSelection" id="languageSelection">
               <option value="en-US">English (US)</option>
               <option value="it-IT">Italian (IT)</option>
@@ -249,8 +303,8 @@
           </div>
           <div>
             <hr class="small-hr">
-            <button onclick="setSTTLanguage()">
-              Set Language
+            <button onclick="saveSTTSettings()">
+              Save Settings
             </button>
           </div>
         </div>

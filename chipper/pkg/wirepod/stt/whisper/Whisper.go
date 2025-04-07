@@ -53,6 +53,13 @@ func Init() error {
 					Key:      config.Knowledge.Key,
 				}
 				logger.Println("Using Groq for Whisper API (from config file)")
+				
+				// Update the STT configuration to match
+				vars.APIConfig.STT.Provider = "groq"
+				vars.APIConfig.STT.APIKey = config.Knowledge.Key
+				vars.APIConfig.STT.Endpoint = config.Knowledge.Endpoint
+				vars.WriteConfigToDisk()
+				
 				// Remove the temporary config file
 				os.Remove("groq_config.json")
 				return nil
@@ -60,14 +67,41 @@ func Init() error {
 		}
 	}
 
-	// Check if provider is set in the config
+	// First check STT configuration
+	if vars.APIConfig.STT.Provider != "" && vars.APIConfig.STT.APIKey != "" {
+		baseURL := vars.APIConfig.STT.Endpoint
+		if baseURL == "" {
+			if vars.APIConfig.STT.Provider == "groq" {
+				baseURL = "https://api.groq.com/openai/v1"
+			} else {
+				baseURL = "https://api.openai.com/v1"
+			}
+		}
+		
+		currentProvider = Provider{
+			Name:     vars.APIConfig.STT.Provider,
+			BaseURL:  baseURL,
+			Key:      vars.APIConfig.STT.APIKey,
+		}
+		logger.Println(fmt.Sprintf("Using %s for Whisper API (from STT config)", vars.APIConfig.STT.Provider))
+		return nil
+	}
+	
+	// Check if provider is set in the Knowledge configuration (legacy support)
 	if vars.APIConfig.Knowledge.Provider == "groq" && vars.APIConfig.Knowledge.Key != "" && vars.APIConfig.Knowledge.Endpoint != "" {
 		currentProvider = Provider{
 			Name:     "groq",
 			BaseURL:  vars.APIConfig.Knowledge.Endpoint,
 			Key:      vars.APIConfig.Knowledge.Key,
 		}
-		logger.Println("Using Groq for Whisper API")
+		
+		// Update the STT configuration to match
+		vars.APIConfig.STT.Provider = "groq"
+		vars.APIConfig.STT.APIKey = vars.APIConfig.Knowledge.Key
+		vars.APIConfig.STT.Endpoint = vars.APIConfig.Knowledge.Endpoint
+		vars.WriteConfigToDisk()
+		
+		logger.Println("Using Groq for Whisper API (migrated from Knowledge config)")
 	} else if os.Getenv("OPENAI_KEY") != "" {
 		// Legacy support for environment variable
 		currentProvider = Provider{
@@ -75,17 +109,31 @@ func Init() error {
 			BaseURL:  "https://api.openai.com/v1",
 			Key:      os.Getenv("OPENAI_KEY"),
 		}
-		logger.Println("Using OpenAI for Whisper API (from environment)")
+		
+		// Update the STT configuration to match
+		vars.APIConfig.STT.Provider = "openai"
+		vars.APIConfig.STT.APIKey = os.Getenv("OPENAI_KEY")
+		vars.APIConfig.STT.Endpoint = "https://api.openai.com/v1"
+		vars.WriteConfigToDisk()
+		
+		logger.Println("Using OpenAI for Whisper API (migrated from environment)")
 	} else if vars.APIConfig.Knowledge.Provider == "openai" && vars.APIConfig.Knowledge.Key != "" {
 		currentProvider = Provider{
 			Name:     "openai",
 			BaseURL:  "https://api.openai.com/v1",
 			Key:      vars.APIConfig.Knowledge.Key,
 		}
-		logger.Println("Using OpenAI for Whisper API (from config)")
+		
+		// Update the STT configuration to match
+		vars.APIConfig.STT.Provider = "openai"
+		vars.APIConfig.STT.APIKey = vars.APIConfig.Knowledge.Key
+		vars.APIConfig.STT.Endpoint = "https://api.openai.com/v1"
+		vars.WriteConfigToDisk()
+		
+		logger.Println("Using OpenAI for Whisper API (migrated from Knowledge config)")
 	} else {
-		logger.Println("This is an early implementation of the Whisper API. You must set either OPENAI_KEY env var or configure a provider in apiConfig.json.")
-		//os.Exit(1)
+		logger.Println("No valid Whisper API configuration found. Please configure a provider in the STT settings.")
+		return fmt.Errorf("no valid API provider configured for Whisper")
 	}
 	return nil
 }
