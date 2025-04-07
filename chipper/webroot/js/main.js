@@ -604,9 +604,14 @@ function showLanguage() {
       
       // Set up Whisper API settings if applicable
       if (parsed.provider === "whisper") {
-        // Set provider (OpenAI or Groq)
+        // Set provider (OpenAI, Groq, or custom)
         if (parsed.stt_provider) {
-          getE("whisperProviderSelection").value = parsed.stt_provider;
+          // Determine if this is a custom provider
+          if (parsed.stt_provider !== "openai" && parsed.stt_provider !== "groq") {
+            getE("whisperProviderSelection").value = "custom";
+          } else {
+            getE("whisperProviderSelection").value = parsed.stt_provider;
+          }
           updateWhisperProviderOptions();
         }
         
@@ -615,17 +620,9 @@ function showLanguage() {
           getE("whisperApiKey").value = parsed.api_key;
         }
         
-        // Set endpoint
-        if (parsed.endpoint) {
+        // Set custom endpoint if using custom provider
+        if (parsed.stt_provider === "custom" && parsed.endpoint) {
           getE("whisperEndpoint").value = parsed.endpoint;
-        } else {
-          // Set default endpoint based on provider
-          const provider = getE("whisperProviderSelection").value;
-          if (provider === "openai") {
-            getE("whisperEndpoint").value = "https://api.openai.com/v1";
-          } else if (provider === "groq") {
-            getE("whisperEndpoint").value = "https://api.groq.com/openai/v1";
-          }
         }
       }
       
@@ -660,17 +657,18 @@ function updateSTTServiceOptions() {
 function updateWhisperProviderOptions() {
   const provider = getE("whisperProviderSelection").value;
   
-  // Update the endpoint placeholder based on provider
+  // Hide all provider-specific elements first
+  getE("whisperCustomEndpoint").style.display = "none";
+  getE("openaiEndpointInfo").style.display = "none";
+  getE("groqEndpointInfo").style.display = "none";
+  
+  // Show relevant elements based on provider
   if (provider === "openai") {
-    getE("whisperEndpoint").placeholder = "https://api.openai.com/v1";
-    if (!getE("whisperEndpoint").value) {
-      getE("whisperEndpoint").value = "https://api.openai.com/v1";
-    }
+    getE("openaiEndpointInfo").style.display = "block";
   } else if (provider === "groq") {
-    getE("whisperEndpoint").placeholder = "https://api.groq.com/openai/v1";
-    if (!getE("whisperEndpoint").value) {
-      getE("whisperEndpoint").value = "https://api.groq.com/openai/v1";
-    }
+    getE("groqEndpointInfo").style.display = "block";
+  } else if (provider === "custom") {
+    getE("whisperCustomEndpoint").style.display = "block";
   }
 }
 
@@ -689,9 +687,18 @@ function saveSTTSettings() {
   
   // Add service-specific settings
   if (service === "whisper") {
-    data.stt_provider = getE("whisperProviderSelection").value;
+    const whisperProvider = getE("whisperProviderSelection").value;
+    data.stt_provider = whisperProvider;
     data.api_key = getE("whisperApiKey").value;
-    data.endpoint = getE("whisperEndpoint").value;
+    
+    // Set the endpoint based on provider
+    if (whisperProvider === "openai") {
+      data.endpoint = "https://api.openai.com/v1";
+    } else if (whisperProvider === "groq") {
+      data.endpoint = "https://api.groq.com/openai/v1";
+    } else if (whisperProvider === "custom") {
+      data.endpoint = getE("whisperEndpoint").value;
+    }
   } else if (service === "whisper.cpp") {
     data.model = getE("whisperCppModel").value;
   }

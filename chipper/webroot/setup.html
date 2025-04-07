@@ -251,6 +251,7 @@
             <select name="whisperProviderSelection" id="whisperProviderSelection" onchange="updateWhisperProviderOptions()">
               <option value="openai">OpenAI</option>
               <option value="groq">Groq</option>
+              <option value="custom">Custom OpenAI-compatible</option>
             </select>
           </div>
           
@@ -259,9 +260,14 @@
             <input type="text" id="whisperApiKey" name="whisperApiKey" />
           </div>
           
-          <div>
+          <div id="whisperCustomEndpoint" style="display: none;">
             <label for="whisperEndpoint">API Base URL:</label>
-            <input type="text" id="whisperEndpoint" name="whisperEndpoint" placeholder="https://api.openai.com/v1" />
+            <input type="text" id="whisperEndpoint" name="whisperEndpoint" placeholder="https://your-api-endpoint.com/v1" />
+          </div>
+          
+          <div id="whisperEndpointInfo" style="font-size: 0.9em; margin-top: 5px;">
+            <span id="openaiEndpointInfo">Using endpoint: https://api.openai.com/v1</span>
+            <span id="groqEndpointInfo" style="display: none;">Using endpoint: https://api.groq.com/openai/v1</span>
           </div>
         </div>
         

@@ -262,12 +262,13 @@ func handleSetSTTInfo(w http.ResponseWriter, r *http.Request) {
 			vars.APIConfig.STT.APIKey = request.APIKey
 		}
 		
-		if request.Endpoint != "" {
-			vars.APIConfig.STT.Endpoint = request.Endpoint
-		} else if vars.APIConfig.STT.Provider == "openai" {
+		// Set endpoint based on provider
+		if request.SttProvider == "openai" {
 			vars.APIConfig.STT.Endpoint = "https://api.openai.com/v1"
-		} else if vars.APIConfig.STT.Provider == "groq" {
+		} else if request.SttProvider == "groq" {
 			vars.APIConfig.STT.Endpoint = "https://api.groq.com/openai/v1"
+		} else if request.SttProvider == "custom" && request.Endpoint != "" {
+			vars.APIConfig.STT.Endpoint = request.Endpoint
 		}
 		
 	} else {

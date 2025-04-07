@@ -73,8 +73,11 @@ func Init() error {
 		if baseURL == "" {
 			if vars.APIConfig.STT.Provider == "groq" {
 				baseURL = "https://api.groq.com/openai/v1"
-			} else {
+			} else if vars.APIConfig.STT.Provider == "openai" {
 				baseURL = "https://api.openai.com/v1"
+			} else {
+				// If it's a custom provider, we must have an endpoint
+				return fmt.Errorf("custom provider requires an endpoint URL")
 			}
 		}
 		

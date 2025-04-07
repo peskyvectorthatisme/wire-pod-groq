@@ -109,6 +109,10 @@ func WriteSTT() {
 		// Endpoint
 		if os.Getenv("WHISPER_ENDPOINT") != "" {
 			APIConfig.STT.Endpoint = os.Getenv("WHISPER_ENDPOINT")
+			// If endpoint is provided but no provider specified, assume it's custom
+			if APIConfig.STT.Provider != "openai" && APIConfig.STT.Provider != "groq" {
+				APIConfig.STT.Provider = "custom"
+			}
 		} else if APIConfig.STT.Provider == "openai" {
 			APIConfig.STT.Endpoint = "https://api.openai.com/v1"
 		} else if APIConfig.STT.Provider == "groq" {
