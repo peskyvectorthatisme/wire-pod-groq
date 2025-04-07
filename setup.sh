@@ -271,7 +271,13 @@ function getSTT() {
             openAIKeyPrompt
             echo "export WHISPER_API_KEY=${openaiKey}" >> ./chipper/source.sh
             echo "export WHISPER_ENDPOINT=https://api.openai.com/v1" >> ./chipper/source.sh
-            echo "Setting up OpenAI Whisper API service."
+            
+            # Check OpenAI connection
+            if checkApiEndpoint "https://api.openai.com/v1" "${openaiKey}" "OpenAI"; then
+                echo "Setting up OpenAI Whisper API service."
+            else
+                echo "Continuing with setup, but please verify your API key and internet connection later."
+            fi
             
         elif [[ ${whisperProvider} == "groq" ]]; then
             function groqKeyPrompt() {
@@ -292,7 +298,13 @@ function getSTT() {
             
             echo "export WHISPER_API_KEY=${groqKey}" >> ./chipper/source.sh
             echo "export WHISPER_ENDPOINT=${groqEndpoint}" >> ./chipper/source.sh
-            echo "Setting up Groq Whisper API service with endpoint: ${groqEndpoint}"
+            
+            # Check Groq connection
+            if checkApiEndpoint "${groqEndpoint}" "${groqKey}" "Groq"; then
+                echo "Setting up Groq Whisper API service with endpoint: ${groqEndpoint}"
+            else 
+                echo "Continuing with setup, but please verify your API key and internet connection later."
+            fi
             
         elif [[ ${whisperProvider} == "custom" ]]; then
             function customKeyPrompt() {
@@ -324,7 +336,13 @@ function getSTT() {
             
             echo "export WHISPER_API_KEY=${customKey}" >> ./chipper/source.sh
             echo "export WHISPER_ENDPOINT=${customEndpoint}" >> ./chipper/source.sh
-            echo "Setting up custom Whisper API service with endpoint: ${customEndpoint}"
+            
+            # Check custom endpoint connection
+            if checkApiEndpoint "${customEndpoint}" "${customKey}" "custom"; then
+                echo "Setting up custom Whisper API service with endpoint: ${customEndpoint}"
+            else
+                echo "Continuing with setup, but please verify your API key, endpoint, and internet connection later."
+            fi
         fi
         
         # Language selection is not needed for Whisper API as the API handles language detection automatically
@@ -784,6 +802,38 @@ function defaultLaunch() {
     getSTT
     echo
     echo "wire-pod is ready to run! You are ready to move to the next step and run sudo ./chipper/start.sh"
+}
+
+function checkApiEndpoint() {
+    local endpoint=$1
+    local api_key=$2
+    local provider=$3
+    
+    echo "Checking connection to $provider endpoint ($endpoint)..."
+    
+    # Add models to endpoint if it ends with /v1
+    if [[ "$endpoint" == *"/v1" ]]; then
+        test_endpoint="${endpoint}/models"
+    else
+        test_endpoint="${endpoint}/v1/models"
+    fi
+    
+    # Test connection with curl
+    response=$(curl -s -o /dev/null -w "%{http_code}" -m 5 -H "Authorization: Bearer ${api_key}" "${test_endpoint}")
+    
+    if [[ "$response" == "200" ]]; then
+        echo -e "\033[32mConnection successful!\033[0m"
+        return 0
+    elif [[ "$response" == "401" || "$response" == "403" ]]; then
+        echo -e "\033[31mAuthentication failed! Please check your API key.\033[0m"
+        return 1
+    elif [[ "$response" == "000" ]]; then
+        echo -e "\033[31mCannot connect to endpoint. Please check your internet connection and the endpoint URL.\033[0m"
+        return 1
+    else
+        echo -e "\033[31mEndpoint returned unexpected status code: $response\033[0m"
+        return 1
+    fi
 }
 
 if [[ $1 == "scp" ]]; then

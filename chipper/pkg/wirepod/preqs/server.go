@@ -31,9 +31,14 @@ var stiHandler func(sr.SpeechRequest) (string, map[string]string, error)
 var isSti bool = false
 
 func ReloadVosk() {
-	if vars.APIConfig.STT.Service == "vosk" || vars.APIConfig.STT.Service == "whisper.cpp" {
+	// Initialize the selected STT service based on the current configuration
+	if vars.APIConfig.STT.Service == "vosk" || vars.APIConfig.STT.Service == "whisper.cpp" || vars.APIConfig.STT.Service == "whisper" || vars.APIConfig.STT.Service == "coqui" || vars.APIConfig.STT.Service == "leopard" {
+		// Restart the STT service with the new configuration
+		logger.Println("Restarting STT service: " + vars.APIConfig.STT.Service)
 		vars.SttInitFunc()
 		vars.IntentList, _ = vars.LoadIntents()
+	} else {
+		logger.Println("Unknown STT service: " + vars.APIConfig.STT.Service)
 	}
 }
 

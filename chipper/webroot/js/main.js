@@ -665,6 +665,7 @@ function updateWhisperProviderOptions() {
   getE("whisperCustomEndpoint").style.display = "none";
   getE("openaiEndpointInfo").style.display = "none";
   getE("groqEndpointInfo").style.display = "none";
+  getE("connectionStatus").innerHTML = ""; // Clear connection status
   
   // Show relevant elements based on provider
   if (provider === "openai") {
@@ -808,4 +809,83 @@ function toggleVisibility(sections, sectionToShow, iconId) {
 // Alias for backward compatibility
 function showLanguage() {
   showSTT();
+}
+
+function testEndpointConnection() {
+  const provider = getE("whisperProviderSelection").value;
+  const apiKey = getE("whisperApiKey").value;
+  let endpoint;
+  
+  // Get the appropriate endpoint based on provider
+  if (provider === "openai") {
+    endpoint = "https://api.openai.com/v1";
+  } else if (provider === "groq") {
+    endpoint = "https://api.groq.com/openai/v1";
+  } else if (provider === "custom") {
+    endpoint = getE("whisperEndpoint").value;
+  }
+  
+  // Validate inputs
+  if (!endpoint) {
+    displayConnectionStatus("error", "Please enter a valid endpoint URL");
+    return;
+  }
+  
+  if (!apiKey) {
+    displayConnectionStatus("error", "Please enter an API key");
+    return;
+  }
+  
+  // Show testing indicator
+  displayConnectionStatus("testing", "Testing connection...");
+  
+  // Send request to test the endpoint
+  fetch("/api/test_endpoint", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      endpoint: endpoint,
+      api_key: apiKey
+    }),
+  })
+    .then(response => response.json())
+    .then(result => {
+      if (result.status === "success") {
+        displayConnectionStatus("success", "Connection successful!");
+      } else if (result.status === "auth_error") {
+        displayConnectionStatus("error", "Authentication failed: Invalid API key");
+      } else {
+        displayConnectionStatus("error", result.message);
+      }
+    })
+    .catch(error => {
+      displayConnectionStatus("error", "Request failed: " + error.message);
+    });
+}
+
+function displayConnectionStatus(status, message) {
+  const statusElem = getE("connectionStatus");
+  statusElem.innerHTML = "";
+  
+  const statusIcon = document.createElement("span");
+  statusIcon.style.marginRight = "5px";
+  
+  const statusText = document.createElement("span");
+  statusText.textContent = message;
+  
+  if (status === "success") {
+    statusIcon.innerHTML = "✅";
+    statusText.style.color = "#4CAF50";
+  } else if (status === "error") {
+    statusIcon.innerHTML = "❌";
+    statusText.style.color = "#f44336";
+  } else if (status === "testing") {
+    statusIcon.innerHTML = "🔄";
+    statusText.style.color = "#2196F3";
+  }
+  
+  statusElem.appendChild(statusIcon);
+  statusElem.appendChild(statusText);
 }

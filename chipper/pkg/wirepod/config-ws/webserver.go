@@ -10,7 +10,9 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kercre123/wire-pod/chipper/pkg/logger"
 	"github.com/kercre123/wire-pod/chipper/pkg/scripting"
@@ -23,18 +25,20 @@ import (
 var SttInitFunc func() error
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "*")
-
-	switch strings.TrimPrefix(r.URL.Path, "/api/") {
+	endpoint := strings.Split(r.URL.Path, "/")[2]
+	switch endpoint {
 	case "add_custom_intent":
 		handleAddCustomIntent(w, r)
 	case "edit_custom_intent":
 		handleEditCustomIntent(w, r)
-	case "get_custom_intents_json":
-		handleGetCustomIntentsJSON(w)
 	case "remove_custom_intent":
 		handleRemoveCustomIntent(w, r)
+	case "get_custom_intents_json":
+		handleGetCustomIntentsJson(w)
+	case "is_api_v3":
+		fmt.Fprint(w, "true")
+	case "get_config":
+		handleGetConfig(w)
 	case "set_weather_api":
 		handleSetWeatherAPI(w, r)
 	case "get_weather_api":
@@ -45,30 +49,30 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		handleGetKGAPI(w)
 	case "set_stt_info":
 		handleSetSTTInfo(w, r)
-	case "get_download_status":
-		handleGetDownloadStatus(w)
 	case "get_stt_info":
 		handleGetSTTInfo(w)
-	case "get_config":
-		handleGetConfig(w)
+	case "get_download_status":
+		handleGetDownloadStatus(w)
 	case "get_logs":
 		handleGetLogs(w)
 	case "get_debug_logs":
 		handleGetDebugLogs(w)
-	case "is_running":
+	case "get_escapepod_mode":
+		fmt.Fprint(w, strconv.FormatBool(vars.APIConfig.Server.EPConfig))
+	case "get_is_running":
 		handleIsRunning(w)
 	case "delete_chats":
 		handleDeleteChats(w)
-	case "get_ota":
-		handleGetOTA(w, r)
 	case "get_version_info":
 		handleGetVersionInfo(w)
-	case "generate_certs":
+	case "reset":
+		handleReset(w)
+	case "certgen":
 		handleGenerateCerts(w)
-	case "is_api_v3":
-		fmt.Fprintf(w, "it is!")
+	case "test_endpoint":
+		handleTestEndpoint(w, r)
 	default:
-		http.Error(w, "not found", http.StatusNotFound)
+		http.Error(w, "unknown endpoint", http.StatusBadRequest)
 	}
 }
 
@@ -145,7 +149,7 @@ func handleEditCustomIntent(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "Intent edited successfully.")
 }
 
-func handleGetCustomIntentsJSON(w http.ResponseWriter) {
+func handleGetCustomIntentsJson(w http.ResponseWriter) {
 	if !vars.CustomIntentsExist {
 		http.Error(w, "you must create an intent first", http.StatusBadRequest)
 		return
@@ -550,4 +554,89 @@ func isDownloadedLanguage(language string, downloadedLanguages []string) bool {
 		}
 	}
 	return false
+}
+
+// handleTestEndpoint tests the connection to an API endpoint
+func handleTestEndpoint(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Endpoint string `json:"endpoint"`
+		ApiKey   string `json:"api_key"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	
+	// Ensure the endpoint is valid
+	endpoint := request.Endpoint
+	if !strings.HasPrefix(endpoint, "http") {
+		http.Error(w, "invalid endpoint URL", http.StatusBadRequest)
+		return
+	}
+	
+	// Create a test request to the health or models endpoint
+	testEndpoint := endpoint
+	if strings.HasSuffix(testEndpoint, "/v1") {
+		testEndpoint += "/models"
+	} else if !strings.HasSuffix(testEndpoint, "/models") {
+		testEndpoint = strings.TrimSuffix(testEndpoint, "/") + "/v1/models"
+	}
+	
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest("GET", testEndpoint, nil)
+	if err != nil {
+		http.Error(w, "Error creating request: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	// Add API key if provided
+	if request.ApiKey != "" {
+		req.Header.Add("Authorization", "Bearer "+request.ApiKey)
+	}
+	
+	// Perform the request
+	resp, err := client.Do(req)
+	if err != nil {
+		// Connection error
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "error",
+			"message": "Connection failed: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+	
+	// Check response status
+	statusCode := resp.StatusCode
+	var result map[string]interface{}
+	
+	if statusCode >= 200 && statusCode < 300 {
+		// Success - connection is working
+		result = map[string]interface{}{
+			"status": "success",
+			"message": "Connection successful",
+			"http_code": statusCode,
+		}
+	} else if statusCode == 401 || statusCode == 403 {
+		// Authentication error
+		result = map[string]interface{}{
+			"status": "auth_error",
+			"message": "Authentication failed: Invalid API key",
+			"http_code": statusCode,
+		}
+	} else {
+		// Other error
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		result = map[string]interface{}{
+			"status": "error",
+			"message": "Endpoint error: " + resp.Status,
+			"http_code": statusCode,
+			"response": string(bodyBytes),
+		}
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
