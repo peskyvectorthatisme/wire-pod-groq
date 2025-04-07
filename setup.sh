@@ -327,7 +327,47 @@ function getSTT() {
             echo "Setting up custom Whisper API service with endpoint: ${customEndpoint}"
         fi
         
-        # Ask for language setting
+        # Language selection is not needed for Whisper API as the API handles language detection automatically
+        echo "Whisper API will automatically detect the language."
+        
+        elif [[ ${sttService} == "whisper.cpp" ]]; then
+        echo "export STT_SERVICE=whisper.cpp" >> ./chipper/source.sh
+        origDir="$(pwd)"
+        echo "Getting Whisper assets"
+        if [[ ! -d ./whisper.cpp ]]; then
+            mkdir whisper.cpp
+            cd whisper.cpp
+            git clone https://github.com/ggerganov/whisper.cpp.git .
+        else
+            cd whisper.cpp
+        fi
+        function whichWhisperModel() {
+            availableModels="tiny, base, small, medium, large-v3, large-v3-q5_0"
+            echo
+            echo "Which Whisper model would you like to use?"
+            echo "Options: $availableModels"
+            echo '(tiny is recommended)'
+            echo
+            read -p "Enter preferred model: " whispermodel
+            if [[ ! -n ${whispermodel} ]]; then
+                echo
+                echo "You must enter a key."
+                whichWhisperModel
+            fi
+            if [[ ! ${availableModels} == *"${whispermodel}"* ]]; then
+                echo
+                echo "Invalid model."
+                whichWhisperModel
+            fi
+        }
+        whichWhisperModel
+        ./models/download-ggml-model.sh $whispermodel
+        cd bindings/go
+        make whisper
+        cd ${origDir}
+        echo "export WHISPER_MODEL=$whispermodel" >> ./chipper/source.sh
+        
+        # Language selection for Whisper.cpp and other services
         function whisperLanguagePrompt() {
             echo
             echo "Which language would you like to use for speech recognition?"
@@ -369,46 +409,12 @@ function getSTT() {
             esac
         }
         
-        whisperLanguagePrompt
-        echo "export STT_LANGUAGE=${sttLang}" >> ./chipper/source.sh
-        echo "Speech recognition language set to: ${sttLang}"
-        
-        elif [[ ${sttService} == "whisper.cpp" ]]; then
-        echo "export STT_SERVICE=whisper.cpp" >> ./chipper/source.sh
-        origDir="$(pwd)"
-        echo "Getting Whisper assets"
-        if [[ ! -d ./whisper.cpp ]]; then
-            mkdir whisper.cpp
-            cd whisper.cpp
-            git clone https://github.com/ggerganov/whisper.cpp.git .
-        else
-            cd whisper.cpp
+        # Only ask for language for non-Whisper API services
+        if [[ ${sttService} != "whisper" ]]; then
+            whisperLanguagePrompt
+            echo "export STT_LANGUAGE=${sttLang}" >> ./chipper/source.sh
+            echo "Speech recognition language set to: ${sttLang}"
         fi
-        function whichWhisperModel() {
-            availableModels="tiny, base, small, medium, large-v3, large-v3-q5_0"
-            echo
-            echo "Which Whisper model would you like to use?"
-            echo "Options: $availableModels"
-            echo '(tiny is recommended)'
-            echo
-            read -p "Enter preferred model: " whispermodel
-            if [[ ! -n ${whispermodel} ]]; then
-                echo
-                echo "You must enter a key."
-                whichWhisperModel
-            fi
-            if [[ ! ${availableModels} == *"${whispermodel}"* ]]; then
-                echo
-                echo "Invalid model."
-                whichWhisperModel
-            fi
-        }
-        whichWhisperModel
-        ./models/download-ggml-model.sh $whispermodel
-        cd bindings/go
-        make whisper
-        cd ${origDir}
-        echo "export WHISPER_MODEL=$whispermodel" >> ./chipper/source.sh
     else
         echo "export STT_SERVICE=coqui" >> ./chipper/source.sh
         if [[ ! -f ./stt/completed ]]; then

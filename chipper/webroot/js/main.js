@@ -591,8 +591,8 @@ function checkUpdate() {
     });
 }
 
-function showLanguage() {
-  toggleVisibility(["section-weather", "section-restart", "section-kg", "section-language"], "section-language", "icon-Language");
+function showSTT() {
+  toggleVisibility(["section-weather", "section-restart", "section-kg", "section-language"], "section-language", "icon-STT");
   fetch("/api/get_stt_info")
     .then((response) => response.json())
     .then((parsed) => {
@@ -648,9 +648,13 @@ function updateSTTServiceOptions() {
   // Show relevant settings based on service
   if (service === "whisper") {
     getE("whisperApiSettings").style.display = "block";
+    getE("languageSelectionDiv").style.display = "none"; // Hide language selection for Whisper API
     updateWhisperProviderOptions();
   } else if (service === "whisper.cpp") {
     getE("whisperCppSettings").style.display = "block";
+    getE("languageSelectionDiv").style.display = "block"; // Show language selection
+  } else {
+    getE("languageSelectionDiv").style.display = "block"; // Show language selection
   }
 }
 
@@ -715,12 +719,62 @@ function saveSTTSettings() {
     .then((response) => response.text())
     .then((response) => {
       if (response.includes("downloading")) {
-        displayMessage("languageStatus", "Downloading model...");
-        updateSTTLanguageDownload();
+        // Show progress bar for downloading
+        getE("downloadProgress").style.display = "block";
+        getE("languageStatus").innerHTML = "";
+        startProgressMonitoring();
       } else {
+        getE("downloadProgress").style.display = "none";
         displayMessage("languageStatus", response);
       }
     });
+}
+
+function startProgressMonitoring() {
+  let progress = 0;
+  const progressBar = getE("progressBar");
+  const downloadStatus = getE("downloadStatus");
+  
+  // Simulate progress until we get real status
+  const initialInterval = setInterval(() => {
+    if (progress < 90) {
+      progress += Math.random() * 5;
+      progressBar.style.width = progress + "%";
+    }
+  }, 500);
+  
+  // Check actual download status
+  const statusCheck = setInterval(() => {
+    fetch("/api/get_download_status")
+      .then(response => response.text())
+      .then(status => {
+        if (status.includes("success")) {
+          clearInterval(initialInterval);
+          clearInterval(statusCheck);
+          progressBar.style.width = "100%";
+          downloadStatus.textContent = "Download complete!";
+          
+          // Hide progress after 2 seconds and show success message
+          setTimeout(() => {
+            getE("downloadProgress").style.display = "none";
+            displayMessage("languageStatus", "Model downloaded successfully. Settings saved.");
+          }, 2000);
+        } else if (status.includes("error")) {
+          clearInterval(initialInterval);
+          clearInterval(statusCheck);
+          downloadStatus.textContent = "Error downloading model";
+          progressBar.style.backgroundColor = "#f44336";
+          
+          // Show error message
+          displayMessage("languageStatus", "Error: " + status);
+        } else if (status.includes("not downloading")) {
+          clearInterval(initialInterval);
+          clearInterval(statusCheck);
+          getE("downloadProgress").style.display = "none";
+          displayMessage("languageStatus", "Settings saved successfully.");
+        }
+      });
+  }, 1000);
 }
 
 function showVersion() {
@@ -749,4 +803,9 @@ function toggleVisibility(sections, sectionToShow, iconId) {
   });
   getE(sectionToShow).style.display = "block";
   updateColor(iconId);
+}
+
+// Alias for backward compatibility
+function showLanguage() {
+  showSTT();
 }

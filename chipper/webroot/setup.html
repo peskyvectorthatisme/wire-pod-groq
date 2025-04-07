@@ -33,8 +33,8 @@
               name="icon"></i><br />Knowledge Graph</a>
         </div>
         <div class="main-nav-child">
-          <a href="#" onclick="showLanguage(); return false;"><i class="fa-solid fa-language" id="icon-Language"
-              name="icon"></i><br />Set Language</a>
+          <a href="#" onclick="showSTT(); return false;"><i class="fa-solid fa-microphone" id="icon-STT"
+              name="icon"></i><br />Speech Recognition</a>
         </div>
         <!--<div class="main-nav-child"><a href="#" onclick="showRestart(); return false;"><i class="fa solid fa-arrow-rotate-right" id="icon-Restart" name="icon"></i><br/>Restart Wire-Pod</a></div> -->
       </div>
@@ -287,8 +287,8 @@
           </div>
         </div>
         
-        <!-- Language selection -->
-        <div id="languageSelectionDiv" style="margin-top: 15px;">
+        <!-- Language selection - only shown for non-Whisper API services -->
+        <div id="languageSelectionDiv" style="margin-top: 15px; display: block;">
           <div>
             <label for="languageSelection">Recognition Language:</label>
             <select name="languageSelection" id="languageSelection">
@@ -307,12 +307,21 @@
               <option value="vi-VN">VietNamese (VN)</option>
             </select>
           </div>
-          <div>
-            <hr class="small-hr">
-            <button onclick="saveSTTSettings()">
-              Save Settings
-            </button>
+        </div>
+        
+        <!-- Progress indicator for downloads -->
+        <div id="downloadProgress" style="display: none; margin-top: 15px;">
+          <div class="progress-bar-container" style="width: 100%; height: 20px; background-color: #ddd; border-radius: 10px; overflow: hidden;">
+            <div id="progressBar" style="width: 0%; height: 100%; background-color: #4CAF50; transition: width 0.3s;"></div>
           </div>
+          <p id="downloadStatus" style="text-align: center; margin-top: 5px;">Downloading model...</p>
+        </div>
+        
+        <div style="margin-top: 20px;">
+          <hr class="small-hr">
+          <button onclick="saveSTTSettings()" style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Save Settings
+          </button>
         </div>
         <hr />
       </div>
