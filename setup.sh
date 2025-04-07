@@ -143,7 +143,8 @@ function getSTT() {
         echo "1: Coqui (local, no usage collection, less accurate, a little slower)"
         echo "2: Picovoice Leopard (local, usage collected, accurate, account signup required)"
         echo "3: VOSK (local, accurate, multilanguage, fast, recommended)"
-        # echo "4: Whisper (local, accurate, multilanguage, a little slower, recommended for more powerful hardware)"
+        echo "4: Whisper API (OpenAI/Groq compatible API, accurate, multilanguage, requires API key)"
+        echo "5: Whisper.cpp (local, accurate, multilanguage, a little slower, recommended for more powerful hardware)"
         echo
         read -p "Enter a number (3): " sttServiceNum
         if [[ ! -n ${sttServiceNum} ]]; then
@@ -161,6 +162,8 @@ function getSTT() {
             sttService="vosk"
             elif [[ ${sttServiceNum} == "4" ]]; then
             sttService="whisper"
+            elif [[ ${sttServiceNum} == "5" ]]; then
+            sttService="whisper.cpp"
         else
             echo
             echo "Choose a valid number, or just press enter to use the default number."
@@ -225,6 +228,77 @@ function getSTT() {
             cd ${origDir}
         fi
         elif [[ ${sttService} == "whisper" ]]; then
+        echo "export STT_SERVICE=whisper" >> ./chipper/source.sh
+        origDir="$(pwd)"
+        function whichWhisperProvider() {
+            echo
+            echo "Which Whisper API provider would you like to use?"
+            echo "1: OpenAI (requires OpenAI API key)"
+            echo "2: Groq (requires Groq API key)"
+            echo
+            read -p "Enter a number (1): " whisperProviderNum
+            if [[ ! -n ${whisperProviderNum} ]]; then
+                whisperProvider="openai"
+            elif [[ ${whisperProviderNum} == "1" ]]; then
+                whisperProvider="openai"
+            elif [[ ${whisperProviderNum} == "2" ]]; then
+                whisperProvider="groq"
+            else
+                echo
+                echo "Choose a valid number, or just press enter to use the default number."
+                whichWhisperProvider
+            fi
+        }
+        
+        whichWhisperProvider
+        
+        if [[ ${whisperProvider} == "openai" ]]; then
+            function openAIKeyPrompt() {
+                echo
+                echo "Enter your OpenAI API key:"
+                echo
+                read -p "API Key: " openaiKey
+                if [[ ! -n ${openaiKey} ]]; then
+                    echo
+                    echo "You must enter an API key."
+                    openAIKeyPrompt
+                fi
+            }
+            openAIKeyPrompt
+            echo "export OPENAI_KEY=${openaiKey}" >> ./chipper/source.sh
+            echo "Setting up OpenAI Whisper API service."
+            
+        elif [[ ${whisperProvider} == "groq" ]]; then
+            function groqKeyPrompt() {
+                echo
+                echo "Enter your Groq API key:"
+                echo
+                read -p "API Key: " groqKey
+                if [[ ! -n ${groqKey} ]]; then
+                    echo
+                    echo "You must enter an API key."
+                    groqKeyPrompt
+                fi
+            }
+            
+            function groqEndpointPrompt() {
+                echo
+                echo "Enter the Groq API base URL (default: https://api.groq.com/openai/v1):"
+                echo
+                read -p "Base URL: " groqEndpoint
+                if [[ ! -n ${groqEndpoint} ]]; then
+                    groqEndpoint="https://api.groq.com/openai/v1"
+                fi
+            }
+            
+            groqKeyPrompt
+            groqEndpointPrompt
+            
+            # Create a temporary JSON config file to be processed later
+            echo "{\"knowledge\":{\"provider\":\"groq\",\"key\":\"${groqKey}\",\"endpoint\":\"${groqEndpoint}\"}}" > ./chipper/groq_config.json
+            echo "Setting up Groq Whisper API service with endpoint: ${groqEndpoint}"
+        fi
+        elif [[ ${sttService} == "whisper.cpp" ]]; then
         echo "export STT_SERVICE=whisper.cpp" >> ./chipper/source.sh
         origDir="$(pwd)"
         echo "Getting Whisper assets"

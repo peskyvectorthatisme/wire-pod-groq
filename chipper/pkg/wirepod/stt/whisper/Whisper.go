@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
 	"github.com/kercre123/wire-pod/chipper/pkg/logger"
+	"github.com/kercre123/wire-pod/chipper/pkg/vars"
 	sr "github.com/kercre123/wire-pod/chipper/pkg/wirepod/speechrequest"
 	"github.com/orcaman/writerseeker"
 )
@@ -23,9 +25,66 @@ type openAiResp struct {
 	Text string `json:"text"`
 }
 
+// Provider defines which API provider to use
+type Provider struct {
+	Name     string
+	BaseURL  string
+	Key      string
+}
+
+var currentProvider Provider
+
 func Init() error {
-	if os.Getenv("OPENAI_KEY") == "" {
-		logger.Println("This is an early implementation of the Whisper API which has not been implemented into the web interface. You must set the OPENAI_KEY env var.")
+	// Check if Groq config file exists and load it
+	if _, err := os.Stat("groq_config.json"); err == nil {
+		configData, err := os.ReadFile("groq_config.json")
+		if err == nil {
+			var config struct {
+				Knowledge struct {
+					Provider string `json:"provider"`
+					Key      string `json:"key"`
+					Endpoint string `json:"endpoint"`
+				} `json:"knowledge"`
+			}
+			if json.Unmarshal(configData, &config) == nil && config.Knowledge.Provider == "groq" {
+				currentProvider = Provider{
+					Name:     "groq",
+					BaseURL:  config.Knowledge.Endpoint,
+					Key:      config.Knowledge.Key,
+				}
+				logger.Println("Using Groq for Whisper API (from config file)")
+				// Remove the temporary config file
+				os.Remove("groq_config.json")
+				return nil
+			}
+		}
+	}
+
+	// Check if provider is set in the config
+	if vars.APIConfig.Knowledge.Provider == "groq" && vars.APIConfig.Knowledge.Key != "" && vars.APIConfig.Knowledge.Endpoint != "" {
+		currentProvider = Provider{
+			Name:     "groq",
+			BaseURL:  vars.APIConfig.Knowledge.Endpoint,
+			Key:      vars.APIConfig.Knowledge.Key,
+		}
+		logger.Println("Using Groq for Whisper API")
+	} else if os.Getenv("OPENAI_KEY") != "" {
+		// Legacy support for environment variable
+		currentProvider = Provider{
+			Name:     "openai",
+			BaseURL:  "https://api.openai.com/v1",
+			Key:      os.Getenv("OPENAI_KEY"),
+		}
+		logger.Println("Using OpenAI for Whisper API (from environment)")
+	} else if vars.APIConfig.Knowledge.Provider == "openai" && vars.APIConfig.Knowledge.Key != "" {
+		currentProvider = Provider{
+			Name:     "openai",
+			BaseURL:  "https://api.openai.com/v1",
+			Key:      vars.APIConfig.Knowledge.Key,
+		}
+		logger.Println("Using OpenAI for Whisper API (from config)")
+	} else {
+		logger.Println("This is an early implementation of the Whisper API. You must set either OPENAI_KEY env var or configure a provider in apiConfig.json.")
 		//os.Exit(1)
 	}
 	return nil
@@ -76,35 +135,58 @@ func newAudioIntBuffer(r io.Reader) (*audio.IntBuffer, error) {
 	}
 }
 
-func makeOpenAIReq(in []byte) string {
-	url := "https://api.openai.com/v1/audio/transcriptions"
+func makeAPIRequest(in []byte) (string, error) {
+	if currentProvider.Name == "" {
+		return "", fmt.Errorf("no API provider configured")
+	}
+
+	// Construct the full endpoint URL
+	endpointURL := currentProvider.BaseURL
+	if !strings.HasSuffix(endpointURL, "/") {
+		endpointURL += "/"
+	}
+	if !strings.HasSuffix(endpointURL, "audio/transcriptions") {
+		endpointURL = strings.TrimSuffix(endpointURL, "/") + "/audio/transcriptions"
+	}
 
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
 	w.WriteField("model", "whisper-1")
-	sendFile, _ := w.CreateFormFile("file", "audio.mp3")
+	sendFile, _ := w.CreateFormFile("file", "audio.wav")
 	sendFile.Write(in)
 	w.Close()
 
-	httpReq, _ := http.NewRequest("POST", url, buf)
+	httpReq, _ := http.NewRequest("POST", endpointURL, buf)
 	httpReq.Header.Set("Content-Type", w.FormDataContentType())
-	httpReq.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_KEY"))
+	httpReq.Header.Set("Authorization", "Bearer "+currentProvider.Key)
 
 	client := &http.Client{}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		logger.Println(err)
-		return "There was an error."
+		logger.Println("API request error:", err)
+		return "", err
 	}
 
 	defer resp.Body.Close()
 
-	response, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		logger.Println("API error response:", resp.Status, string(responseBody))
+		return "", fmt.Errorf("API error: %s", resp.Status)
+	}
+
+	response, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
 
 	var aiResponse openAiResp
-	json.Unmarshal(response, &aiResponse)
+	if err := json.Unmarshal(response, &aiResponse); err != nil {
+		logger.Println("Error unmarshaling response:", err)
+		return "", err
+	}
 
-	return aiResponse.Text
+	return aiResponse.Text, nil
 }
 
 func STT(req sr.SpeechRequest) (string, error) {
@@ -113,9 +195,6 @@ func STT(req sr.SpeechRequest) (string, error) {
 	var err error
 	for {
 		_, err = req.GetNextStreamChunk()
-		if err != nil {
-			return "", err
-		}
 		if err != nil {
 			return "", err
 		}
@@ -130,7 +209,13 @@ func STT(req sr.SpeechRequest) (string, error) {
 	pcmBufTo.Write(req.DecodedMicData)
 	pcmBuf := pcm2wav(pcmBufTo.BytesReader())
 
-	transcribedText := strings.ToLower(makeOpenAIReq(pcmBuf))
+	transcribedText, err := makeAPIRequest(pcmBuf)
+	if err != nil {
+		logger.Println("Error from API:", err)
+		return "", err
+	}
+	
+	transcribedText = strings.ToLower(transcribedText)
 	logger.Println("Bot " + req.Device + " Transcribed text: " + transcribedText)
 	return transcribedText, nil
 }

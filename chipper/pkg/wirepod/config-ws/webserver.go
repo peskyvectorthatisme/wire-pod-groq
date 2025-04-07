@@ -241,7 +241,7 @@ func handleSetSTTInfo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		http.Error(w, "service must be vosk or whisper", http.StatusBadRequest)
+		http.Error(w, "service must be vosk, whisper.cpp, or whisper", http.StatusBadRequest)
 		return
 	}
 	vars.APIConfig.STT.Language = request.Language

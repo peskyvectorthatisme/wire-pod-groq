@@ -85,6 +85,7 @@
               <option value="houndify">Houndify</option>
               <option value="together">Together</option>
               <option value="custom">Custom</option>
+              <option value="groq">Groq</option>
             </select>
             <span id="houndifyInput" style="display: none">
               <small class="desc">To use Houndify, create an account at
@@ -151,6 +152,21 @@
                   Vector. Keep the response concise yet
                   informative.")</label></small>
               <input type="text" name="customAIPrompt" id="customAIPrompt" /><br />
+            </span>
+
+            <span id="groqAIInput" style="display: none">
+              <small class="desc">Groq provides fast API-compatible services for speech and LLM models.</small><br />
+              <label for="groqKey">Groq API Key:</label>
+              <input type="text" name="groqKey" id="groqKey" /><br />
+              <label for="groqSpeechEndpoint">API Base URL <small class="desc">(OpenAI-compatible endpoint)</small>:</label>
+              <input type="text" name="groqSpeechEndpoint" id="groqSpeechEndpoint" placeholder="https://api.groq.com/openai/v1" /><br />
+              <label for="groqModel">LLM Model Name:</label>
+              <input type="text" name="groqModel" id="groqModel" placeholder="llama3-70b-8192" /><br />
+              <label for="groqAIPrompt">LLM Prompt <small class="desc">(leave blank for default)</small>:</label><br />
+              <small><label class="desc" for="groqAIPrompt">(default: "You are a helpful, animated robot called
+                  Vector. Keep the response concise yet
+                  informative.")</label></small>
+              <input type="text" name="groqAIPrompt" id="groqAIPrompt" /><br />
             </span>
 
             <div style="text-align: left;">

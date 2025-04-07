@@ -253,6 +253,7 @@ function checkKG() {
     "saveChatInput",
     "llmCommandInput",
     "openAIVoiceForEnglishInput",
+    "groqAIInput",
   ];
 
   elements.forEach((el) => (getE(el).style.display = "none"));
@@ -274,6 +275,11 @@ function checkKG() {
     } else if (provider === "custom") {
       getE("intentGraphInput").style.display = "block";
       getE("customAIInput").style.display = "block";
+      getE("saveChatInput").style.display = "block";
+      getE("llmCommandInput").style.display = "block";
+    } else if (provider === "groq") {
+      getE("intentGraphInput").style.display = "block";
+      getE("groqAIInput").style.display = "block";
       getE("saveChatInput").style.display = "block";
       getE("llmCommandInput").style.display = "block";
     }
@@ -320,6 +326,14 @@ function sendKGAPIKey() {
     data.intentgraph = getE("intentyes").checked;
     data.save_chat = getE("saveChatYes").checked
     data.commands_enable = getE("commandYes").checked
+  } else if (provider === "groq") {
+    data.key = getE("groqKey").value;
+    data.model = getE("groqModel").value;
+    data.openai_prompt = getE("groqAIPrompt").value;
+    data.endpoint = getE("groqSpeechEndpoint").value;
+    data.intentgraph = getE("intentyes").checked;
+    data.save_chat = getE("saveChatYes").checked;
+    data.commands_enable = getE("commandYes").checked;
   } else if (provider === "houndify") {
     data.key = getE("houndKey").value;
     data.id = getE("houndID").value;
@@ -376,6 +390,14 @@ function updateKGAPI() {
         getE("customModel").value = data.model;
         getE("customAIPrompt").value = data.openai_prompt;
         getE("customAIEndpoint").value = data.endpoint;
+        getE("commandYes").checked = data.commands_enable
+        getE("intentyes").checked = data.intentgraph
+        getE("saveChatYes").checked = data.save_chat
+      } else if (data.provider === "groq") {
+        getE("groqKey").value = data.key;
+        getE("groqModel").value = data.model;
+        getE("groqAIPrompt").value = data.openai_prompt;
+        getE("groqSpeechEndpoint").value = data.endpoint;
         getE("commandYes").checked = data.commands_enable
         getE("intentyes").checked = data.intentgraph
         getE("saveChatYes").checked = data.save_chat
@@ -574,8 +596,8 @@ function showLanguage() {
   fetch("/api/get_stt_info")
     .then((response) => response.json())
     .then((parsed) => {
-      if (parsed.provider !== "vosk" && parsed.provider !== "whisper.cpp") {
-        displayError("languageStatus", `To set the STT language, the provider must be Vosk or Whisper. The current one is '${parsed.sttProvider}'.`);
+      if (parsed.provider !== "vosk" && parsed.provider !== "whisper.cpp" && parsed.provider !== "whisper") {
+        displayError("languageStatus", `To set the STT language, the provider must be Vosk, Whisper.cpp, or Whisper API. The current one is '${parsed.sttProvider}'.`);
         getE("languageSelectionDiv").style.display = "none";
       } else {
         getE("languageSelectionDiv").style.display = "block";
