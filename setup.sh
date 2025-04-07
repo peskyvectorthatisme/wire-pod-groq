@@ -235,6 +235,7 @@ function getSTT() {
             echo "Which Whisper API provider would you like to use?"
             echo "1: OpenAI (requires OpenAI API key)"
             echo "2: Groq (requires Groq API key)"
+            echo "3: Custom OpenAI-compatible endpoint"
             echo
             read -p "Enter a number (1): " whisperProviderNum
             if [[ ! -n ${whisperProviderNum} ]]; then
@@ -243,6 +244,8 @@ function getSTT() {
                 whisperProvider="openai"
             elif [[ ${whisperProviderNum} == "2" ]]; then
                 whisperProvider="groq"
+            elif [[ ${whisperProviderNum} == "3" ]]; then
+                whisperProvider="custom"
             else
                 echo
                 echo "Choose a valid number, or just press enter to use the default number."
@@ -283,22 +286,45 @@ function getSTT() {
                 fi
             }
             
-            function groqEndpointPrompt() {
-                echo
-                echo "Enter the Groq API base URL (default: https://api.groq.com/openai/v1):"
-                echo
-                read -p "Base URL: " groqEndpoint
-                if [[ ! -n ${groqEndpoint} ]]; then
-                    groqEndpoint="https://api.groq.com/openai/v1"
-                fi
-            }
+            groqEndpoint="https://api.groq.com/openai/v1"
             
             groqKeyPrompt
-            groqEndpointPrompt
             
             echo "export WHISPER_API_KEY=${groqKey}" >> ./chipper/source.sh
             echo "export WHISPER_ENDPOINT=${groqEndpoint}" >> ./chipper/source.sh
             echo "Setting up Groq Whisper API service with endpoint: ${groqEndpoint}"
+            
+        elif [[ ${whisperProvider} == "custom" ]]; then
+            function customKeyPrompt() {
+                echo
+                echo "Enter your API key for the custom endpoint:"
+                echo
+                read -p "API Key: " customKey
+                if [[ ! -n ${customKey} ]]; then
+                    echo
+                    echo "You must enter an API key."
+                    customKeyPrompt
+                fi
+            }
+            
+            function customEndpointPrompt() {
+                echo
+                echo "Enter the custom API base URL (including /v1 if needed):"
+                echo
+                read -p "Base URL: " customEndpoint
+                if [[ ! -n ${customEndpoint} ]]; then
+                    echo
+                    echo "You must enter a base URL."
+                    customEndpointPrompt
+                fi
+            }
+            
+            customKeyPrompt
+            customEndpointPrompt
+            
+            echo "export WHISPER_API_KEY=${customKey}" >> ./chipper/source.sh
+            echo "export WHISPER_ENDPOINT=${customEndpoint}" >> ./chipper/source.sh
+            echo "Setting up custom Whisper API service with endpoint: ${customEndpoint}"
         fi
         
         # Ask for language setting
