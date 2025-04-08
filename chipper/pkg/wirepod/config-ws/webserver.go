@@ -222,84 +222,136 @@ func handleGetKGAPI(w http.ResponseWriter) {
 
 func handleSetSTTInfo(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Language    string `json:"language"`
-		Provider    string `json:"provider"`
-		SttProvider string `json:"stt_provider"`
-		APIKey      string `json:"api_key"`
-		Endpoint    string `json:"endpoint"`
-		Model       string `json:"model"`
+		Language    string `json:"language"`      // General language setting
+		Provider    string `json:"provider"`      // Main STT Service (vosk, whisper, whisper.cpp)
+		SttProvider string `json:"stt_provider"` // Specific Whisper provider (openai, groq, custom)
+		APIKey      string `json:"api_key"`      // Whisper API Key
+		Endpoint    string `json:"endpoint"`      // Whisper Custom Endpoint
+		Model       string `json:"model"`       // Whisper.cpp Model
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	
-	// Check if the STT service is being changed
+
+	// Keep track if a restart is needed
 	needsRestart := false
-	if request.Provider != "" && request.Provider != vars.APIConfig.STT.Service {
+	madeChanges := false
+
+	// Store current values before potential changes to check for restart necessity
+	currentService := vars.APIConfig.STT.Service
+	currentLanguage := vars.APIConfig.STT.Language
+	currentWhisperProvider := vars.APIConfig.STT.Provider
+	currentAPIKey := vars.APIConfig.STT.APIKey
+	currentEndpoint := vars.APIConfig.STT.Endpoint
+	currentModel := vars.APIConfig.STT.Model
+
+	// Check if the main STT service/provider needs to change
+	if request.Provider != "" && request.Provider != currentService {
 		needsRestart = true
-	}
-	
-	// Set the STT service
-	if request.Provider != "" {
+		madeChanges = true
 		vars.APIConfig.STT.Service = request.Provider
 	}
-	
-	// Handle language settings
-	if request.Provider == "vosk" {
-		if !isValidLanguage(request.Language, localization.ValidVoskModels) {
-			http.Error(w, "language not valid for Vosk", http.StatusBadRequest)
-			return
+
+	// Use the potentially updated service for the rest of the function
+	service := vars.APIConfig.STT.Service
+
+	if service == "vosk" {
+		if request.Language != "" {
+			if !isValidLanguage(request.Language, localization.ValidVoskModels) {
+				http.Error(w, "language not valid for Vosk", http.StatusBadRequest)
+				return
+			}
+			if request.Language != currentLanguage {
+				needsRestart = true
+				madeChanges = true
+				vars.APIConfig.STT.Language = request.Language
+			}
+			if !isDownloadedLanguage(vars.APIConfig.STT.Language, vars.DownloadedVoskModels) {
+				go localization.DownloadVoskModel(vars.APIConfig.STT.Language)
+				// Don't save config yet, let download complete
+				fmt.Fprint(w, "downloading")
+				return
+			}
 		}
-		if !isDownloadedLanguage(request.Language, vars.DownloadedVoskModels) {
-			go localization.DownloadVoskModel(request.Language)
-			fmt.Fprint(w, "downloading")
-			return
-		}
-	} else if request.Provider == "whisper.cpp" {
+	} else if service == "whisper.cpp" {
 		// Handle whisper.cpp model
-		if request.Model != "" {
+		if request.Model != "" && request.Model != currentModel {
+			needsRestart = true
+			madeChanges = true
 			vars.APIConfig.STT.Model = request.Model
 		}
-	} else if request.Provider == "whisper" {
-		// Handle Whisper API settings
-		if request.SttProvider != "" {
-			vars.APIConfig.STT.Provider = request.SttProvider
+		// Handle language for whisper.cpp (just store it, doesn't require restart)
+		if request.Language != "" && request.Language != currentLanguage {
+			madeChanges = true
+			vars.APIConfig.STT.Language = request.Language
 		}
+	} else if service == "whisper" {
+		// For Whisper API, none of these changes require a full restart
+		// We'll update values and reinitialize the service using ReloadVosk()
 		
-		if request.APIKey != "" {
+		// Handle Whisper API settings
+		whisperSpecificProvider := vars.APIConfig.STT.Provider // Default to current
+		if request.SttProvider != "" && request.SttProvider != currentWhisperProvider {
+			madeChanges = true
+			whisperSpecificProvider = request.SttProvider
+			vars.APIConfig.STT.Provider = whisperSpecificProvider // Update the specific provider
+		}
+
+		if request.APIKey != "" && request.APIKey != currentAPIKey {
+			madeChanges = true
 			vars.APIConfig.STT.APIKey = request.APIKey
 		}
-		
-		// Set endpoint based on provider
-		if request.SttProvider == "openai" {
-			vars.APIConfig.STT.Endpoint = "https://api.openai.com/v1"
-		} else if request.SttProvider == "groq" {
-			vars.APIConfig.STT.Endpoint = "https://api.groq.com/openai/v1"
-		} else if request.SttProvider == "custom" && request.Endpoint != "" {
-			vars.APIConfig.STT.Endpoint = request.Endpoint
+
+		// Determine the correct endpoint
+		newEndpoint := currentEndpoint // Default to current
+		if whisperSpecificProvider == "openai" {
+			newEndpoint = "https://api.openai.com/v1"
+		} else if whisperSpecificProvider == "groq" {
+			newEndpoint = "https://api.groq.com/openai/v1"
+		} else if whisperSpecificProvider == "custom" && request.Endpoint != "" {
+			newEndpoint = request.Endpoint
 		}
-		
+
+		if newEndpoint != currentEndpoint {
+			madeChanges = true
+			vars.APIConfig.STT.Endpoint = newEndpoint
+		}
+
+		// Language for Whisper API - just store it, doesn't affect operation
+		if request.Language != "" && request.Language != currentLanguage {
+			madeChanges = true
+			vars.APIConfig.STT.Language = request.Language
+		}
 	} else if request.Provider != "" {
+		// This case handles when a Provider was sent in the request, but it's not one of the known ones
 		http.Error(w, "service must be vosk, whisper.cpp, or whisper", http.StatusBadRequest)
 		return
 	}
-	
-	// Set language for all providers
-	if request.Language != "" {
-		vars.APIConfig.STT.Language = request.Language
+
+	// If no changes were made, just return success
+	if !madeChanges {
+		fmt.Fprint(w, "No changes detected.")
+		return
 	}
-	
+
+	// Save config changes
 	vars.APIConfig.PastInitialSetup = true
 	vars.WriteConfigToDisk()
-	
+	logger.Println("Configuration changed, writing to disk")
+
 	if needsRestart {
-		logger.Println("STT service changed to " + vars.APIConfig.STT.Service + ". A restart is needed for the change to take effect.")
-		fmt.Fprint(w, "Settings saved successfully. Please restart the server for the STT service change to take effect.")
+		logger.Println("STT service or critical settings changed. A restart is needed for changes to take effect.")
+		fmt.Fprint(w, "Settings saved successfully. Please restart the server for the changes to take effect.")
 	} else {
-		processreqs.ReloadVosk()
-		logger.Println("Reloaded voice processor successfully")
-		fmt.Fprint(w, "Settings saved successfully.")
+		// For Whisper API settings, we can try to reload without a restart
+		if service == "whisper" {
+			processreqs.ReloadVosk()
+			logger.Println("Reloaded Whisper API settings")
+			fmt.Fprint(w, "Settings saved and applied successfully.")
+		} else {
+			fmt.Fprint(w, "Settings saved successfully.")
+		}
 	}
 }
 
