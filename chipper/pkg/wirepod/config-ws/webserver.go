@@ -234,6 +234,12 @@ func handleSetSTTInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
+	// Check if the STT service is being changed
+	needsRestart := false
+	if request.Provider != "" && request.Provider != vars.APIConfig.STT.Service {
+		needsRestart = true
+	}
+	
 	// Set the STT service
 	if request.Provider != "" {
 		vars.APIConfig.STT.Service = request.Provider
@@ -274,7 +280,7 @@ func handleSetSTTInfo(w http.ResponseWriter, r *http.Request) {
 			vars.APIConfig.STT.Endpoint = request.Endpoint
 		}
 		
-	} else {
+	} else if request.Provider != "" {
 		http.Error(w, "service must be vosk, whisper.cpp, or whisper", http.StatusBadRequest)
 		return
 	}
@@ -286,9 +292,15 @@ func handleSetSTTInfo(w http.ResponseWriter, r *http.Request) {
 	
 	vars.APIConfig.PastInitialSetup = true
 	vars.WriteConfigToDisk()
-	processreqs.ReloadVosk()
-	logger.Println("Reloaded voice processor successfully")
-	fmt.Fprint(w, "Settings saved successfully.")
+	
+	if needsRestart {
+		logger.Println("STT service changed to " + vars.APIConfig.STT.Service + ". A restart is needed for the change to take effect.")
+		fmt.Fprint(w, "Settings saved successfully. Please restart the server for the STT service change to take effect.")
+	} else {
+		processreqs.ReloadVosk()
+		logger.Println("Reloaded voice processor successfully")
+		fmt.Fprint(w, "Settings saved successfully.")
+	}
 }
 
 func handleGetDownloadStatus(w http.ResponseWriter) {

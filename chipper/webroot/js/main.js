@@ -678,102 +678,129 @@ function updateWhisperProviderOptions() {
 }
 
 function saveSTTSettings() {
-  const service = getE("sttServiceSelection").value;
-  const language = getE("languageSelection").value;
+  const selectedService = document.getElementById('sttService').value;
+  const selectedLanguage = document.getElementById('sttLanguage').value;
   
-  const data = {
-    provider: service,
-    language: language,
-    stt_provider: "",
-    api_key: "",
-    endpoint: "",
-    model: ""
+  let data = {
+    provider: selectedService,
+    language: selectedLanguage
   };
   
-  // Add service-specific settings
-  if (service === "whisper") {
-    const whisperProvider = getE("whisperProviderSelection").value;
-    data.stt_provider = whisperProvider;
-    data.api_key = getE("whisperApiKey").value;
+  // Add Whisper API settings if Whisper is selected
+  if (selectedService === 'whisper') {
+    const whisperProvider = document.getElementById('whisperProvider').value;
+    const apiKey = document.getElementById('whisperApiKey').value;
     
-    // Set the endpoint based on provider
-    if (whisperProvider === "openai") {
-      data.endpoint = "https://api.openai.com/v1";
-    } else if (whisperProvider === "groq") {
-      data.endpoint = "https://api.groq.com/openai/v1";
-    } else if (whisperProvider === "custom") {
-      data.endpoint = getE("whisperEndpoint").value;
-    }
-  } else if (service === "whisper.cpp") {
-    data.model = getE("whisperCppModel").value;
-  }
-
-  displayMessage("languageStatus", "Saving settings...");
-
-  fetch("/api/set_stt_info", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  })
-    .then((response) => response.text())
-    .then((response) => {
-      if (response.includes("downloading")) {
-        // Show progress bar for downloading
-        getE("downloadProgress").style.display = "block";
-        getE("languageStatus").innerHTML = "";
-        startProgressMonitoring();
-      } else {
-        getE("downloadProgress").style.display = "none";
-        displayMessage("languageStatus", response);
+    data.stt_provider = whisperProvider;
+    data.api_key = apiKey;
+    
+    // Add custom endpoint if provided
+    if (whisperProvider === 'custom') {
+      const endpoint = document.getElementById('whisperEndpoint').value;
+      if (endpoint) {
+        data.endpoint = endpoint;
       }
-    });
+    }
+  }
+  
+  // Add whisper.cpp model if selected
+  if (selectedService === 'whisper.cpp') {
+    const model = document.getElementById('whisperCppModel').value;
+    if (model) {
+      data.model = model;
+    }
+  }
+  
+  // Disable buttons and show saving message
+  document.getElementById('saveSettingsBtn').disabled = true;
+  document.getElementById('savingMsg').style.display = 'inline';
+  
+  fetch('/api/set_stt_info', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  })
+  .then(response => {
+    if (!response.ok) {
+      return response.text().then(text => { throw new Error(text) });
+    }
+    return response.text();
+  })
+  .then(result => {
+    document.getElementById('saveSettingsBtn').disabled = false;
+    document.getElementById('savingMsg').style.display = 'none';
+    
+    if (result === 'downloading') {
+      // Show downloading message
+      document.getElementById('downloadingMsg').style.display = 'inline';
+      
+      // Poll the download status
+      pollDownloadStatus();
+    } else {
+      document.getElementById('successMsg').textContent = result;
+      document.getElementById('successMsg').style.display = 'inline';
+      
+      // Check if response contains restart message
+      if (result.includes('restart')) {
+        document.getElementById('successMsg').className = 'alert alert-warning';
+      } else {
+        document.getElementById('successMsg').className = 'alert alert-success';
+      }
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        document.getElementById('successMsg').style.display = 'none';
+      }, 5000);
+    }
+  })
+  .catch(error => {
+    document.getElementById('saveSettingsBtn').disabled = false;
+    document.getElementById('savingMsg').style.display = 'none';
+    document.getElementById('errorMsg').textContent = error.message;
+    document.getElementById('errorMsg').style.display = 'inline';
+    
+    // Hide error message after 5 seconds
+    setTimeout(() => {
+      document.getElementById('errorMsg').style.display = 'none';
+    }, 5000);
+  });
 }
 
-function startProgressMonitoring() {
-  let progress = 0;
-  const progressBar = getE("progressBar");
-  const downloadStatus = getE("downloadStatus");
-  
-  // Simulate progress until we get real status
-  const initialInterval = setInterval(() => {
-    if (progress < 90) {
-      progress += Math.random() * 5;
-      progressBar.style.width = progress + "%";
-    }
-  }, 500);
-  
-  // Check actual download status
-  const statusCheck = setInterval(() => {
-    fetch("/api/get_download_status")
+function pollDownloadStatus() {
+  let pollInterval = setInterval(() => {
+    fetch('/api/get_download_status')
       .then(response => response.text())
       .then(status => {
-        if (status.includes("success")) {
-          clearInterval(initialInterval);
-          clearInterval(statusCheck);
-          progressBar.style.width = "100%";
-          downloadStatus.textContent = "Download complete!";
+        if (status.includes('success')) {
+          clearInterval(pollInterval);
+          document.getElementById('downloadingMsg').style.display = 'none';
+          document.getElementById('successMsg').textContent = 'Model downloaded and settings saved successfully.';
+          document.getElementById('successMsg').className = 'alert alert-success';
+          document.getElementById('successMsg').style.display = 'inline';
           
-          // Hide progress after 2 seconds and show success message
+          // Hide success message after 5 seconds
           setTimeout(() => {
-            getE("downloadProgress").style.display = "none";
-            displayMessage("languageStatus", "Model downloaded successfully. Settings saved.");
-          }, 2000);
-        } else if (status.includes("error")) {
-          clearInterval(initialInterval);
-          clearInterval(statusCheck);
-          downloadStatus.textContent = "Error downloading model";
-          progressBar.style.backgroundColor = "#f44336";
+            document.getElementById('successMsg').style.display = 'none';
+          }, 5000);
+        } else if (status.includes('error')) {
+          clearInterval(pollInterval);
+          document.getElementById('downloadingMsg').style.display = 'none';
+          document.getElementById('errorMsg').textContent = 'Error downloading model: ' + status;
+          document.getElementById('errorMsg').style.display = 'inline';
           
-          // Show error message
-          displayMessage("languageStatus", "Error: " + status);
-        } else if (status.includes("not downloading")) {
-          clearInterval(initialInterval);
-          clearInterval(statusCheck);
-          getE("downloadProgress").style.display = "none";
-          displayMessage("languageStatus", "Settings saved successfully.");
+          // Hide error message after 5 seconds
+          setTimeout(() => {
+            document.getElementById('errorMsg').style.display = 'none';
+          }, 5000);
+        } else if (status.includes('not downloading')) {
+          clearInterval(pollInterval);
+          document.getElementById('downloadingMsg').style.display = 'none';
         }
+      })
+      .catch(error => {
+        console.error('Error checking download status:', error);
       });
   }, 1000);
 }
@@ -812,8 +839,8 @@ function showLanguage() {
 }
 
 function testEndpointConnection() {
-  const provider = getE("whisperProviderSelection").value;
-  const apiKey = getE("whisperApiKey").value;
+  const provider = document.getElementById('whisperProvider').value;
+  const apiKey = document.getElementById('whisperApiKey').value;
   let endpoint;
   
   // Get the appropriate endpoint based on provider
@@ -822,8 +849,12 @@ function testEndpointConnection() {
   } else if (provider === "groq") {
     endpoint = "https://api.groq.com/openai/v1";
   } else if (provider === "custom") {
-    endpoint = getE("whisperEndpoint").value;
+    endpoint = document.getElementById('whisperEndpoint').value;
   }
+  
+  // Clear previous connection status before testing
+  document.getElementById('connectionStatus').innerHTML = '';
+  document.getElementById('connectionStatus').className = '';
   
   // Validate inputs
   if (!endpoint) {
@@ -839,53 +870,62 @@ function testEndpointConnection() {
   // Show testing indicator
   displayConnectionStatus("testing", "Testing connection...");
   
-  // Send request to test the endpoint
-  fetch("/api/test_endpoint", {
-    method: "POST",
+  fetch('/api/test_endpoint', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       endpoint: endpoint,
       api_key: apiKey
-    }),
-  })
-    .then(response => response.json())
-    .then(result => {
-      if (result.status === "success") {
-        displayConnectionStatus("success", "Connection successful!");
-      } else if (result.status === "auth_error") {
-        displayConnectionStatus("error", "Authentication failed: Invalid API key");
-      } else {
-        displayConnectionStatus("error", result.message);
-      }
     })
-    .catch(error => {
-      displayConnectionStatus("error", "Request failed: " + error.message);
-    });
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      displayConnectionStatus("success", "Connection successful! API endpoint is working.");
+    } else if (data.status === 'auth_error') {
+      displayConnectionStatus("error", "Authentication failed: Invalid API key.");
+    } else {
+      displayConnectionStatus("error", data.message || "Connection failed. Check your endpoint URL and API key.");
+    }
+  })
+  .catch(error => {
+    displayConnectionStatus("error", "Error testing connection: " + error.message);
+  });
 }
 
 function displayConnectionStatus(status, message) {
-  const statusElem = getE("connectionStatus");
-  statusElem.innerHTML = "";
+  const connectionStatus = document.getElementById('connectionStatus');
+  connectionStatus.style.display = 'block';
   
-  const statusIcon = document.createElement("span");
-  statusIcon.style.marginRight = "5px";
+  // Clear previous content
+  connectionStatus.innerHTML = '';
   
-  const statusText = document.createElement("span");
-  statusText.textContent = message;
+  // Create icon element
+  const icon = document.createElement('i');
+  icon.classList.add('fas');
   
-  if (status === "success") {
-    statusIcon.innerHTML = "✅";
-    statusText.style.color = "#4CAF50";
-  } else if (status === "error") {
-    statusIcon.innerHTML = "❌";
-    statusText.style.color = "#f44336";
-  } else if (status === "testing") {
-    statusIcon.innerHTML = "🔄";
-    statusText.style.color = "#2196F3";
+  // Create text element
+  const text = document.createElement('span');
+  text.textContent = ' ' + message;
+  
+  // Set appropriate icon and style based on status
+  if (status === 'success') {
+    icon.classList.add('fa-check-circle');
+    icon.style.color = '#28a745'; // Green
+    text.style.color = '#28a745';
+  } else if (status === 'error') {
+    icon.classList.add('fa-times-circle');
+    icon.style.color = '#dc3545'; // Red
+    text.style.color = '#dc3545';
+  } else if (status === 'testing') {
+    icon.classList.add('fa-spinner', 'fa-spin');
+    icon.style.color = '#17a2b8'; // Info blue
+    text.style.color = '#17a2b8';
   }
   
-  statusElem.appendChild(statusIcon);
-  statusElem.appendChild(statusText);
+  // Append elements to status div
+  connectionStatus.appendChild(icon);
+  connectionStatus.appendChild(text);
 }
